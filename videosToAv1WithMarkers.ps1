@@ -27,7 +27,7 @@ $Preset = "p7"
 $DurationTolerance = 5
 
 # Supported extensions
-$VideoExtensions = @(".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv")
+$VideoExtensions = @(".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".webm")
 
 # --- Helper Function: Logging ---
 function Write-Log {
