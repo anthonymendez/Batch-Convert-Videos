@@ -15,19 +15,19 @@
 # --- Configuration ---
 $SourceFolder = "Z:\General\videoprojects\Recordings"
 $LogFile = "C:\Users\Anthony\Videos\encoding_log.txt"
-$OutputExtension = ".mp4" 
+$OutputExtension = ".mp4"
 $TargetHeight = 1080
-$Encoder = "av1_nvenc"    
-$CQ = 26 
+$Encoder = "av1_nvenc"
+$CQ = 26
 $Preset = "p7"
-$DurationTolerance = 5 
+$DurationTolerance = 5
 
 # Supported extensions
 $VideoExtensions = @(".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv")
 
 # --- Helper Function: Logging ---
 function Write-Log {
-    param ($Message, $Color="White")
+    param ($Message, $Color = "White")
     $TimeStamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $LogMsg = "[$TimeStamp] $Message"
     Write-Host $LogMsg -ForegroundColor $Color
@@ -59,8 +59,6 @@ function Get-BestMatchingEDL {
         
         # Count identical characters from the start
         for ($i = 0; $i -lt $MinLen; $i++) {
-            $BaseChar = $Base[$i]
-            $EdlChar = $EdlName[$i]
             if ($Base[$i] -eq $EdlName[$i]) {
                 $MatchCount++
             }
@@ -105,9 +103,10 @@ foreach ($File in $Files) {
 
     # 1. Analyze Source File
     try {
-        $SourceProbe = ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,height,r_frame_rate -show_entries format=duration,nb_streams -of json "$($File.FullName)" | ConvertFrom-Json
+        $SourceProbe = ffprobe -v error -select_streams v:0 -show_entries stream=codec_name, height, r_frame_rate -show_entries format=duration, nb_streams -of json "$($File.FullName)" | ConvertFrom-Json
         $SourceAudioCount = (ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "$($File.FullName)" | Measure-Object).Count
-    } catch {
+    }
+    catch {
         Write-Log "  [Error] Could not probe source file. Skipping." "Red"
         continue
     }
@@ -117,7 +116,7 @@ foreach ($File in $Files) {
     $SourceDuration = [math]::Round([double]$SourceProbe.format.duration)
     
     $FpsRaw = $SourceProbe.streams.r_frame_rate
-    $Num,$Den = $FpsRaw.Split('/')
+    $Num, $Den = $FpsRaw.Split('/')
     $FrameRate = [double]$Num / [double]$Den
 
     # 2. Find EDL (Fuzzy or Exact)
@@ -133,7 +132,7 @@ foreach ($File in $Files) {
         $Pattern = "\d+\s+.*\s+(\d{2}:\d{2}:\d{2}[:;]\d{2})\s+(\d{2}:\d{2}:\d{2}[:;]\d{2})$"
         $ChapterIndex = 1
         
-        for ($i=0; $i -lt $EdlContent.Count; $i++) {
+        for ($i = 0; $i -lt $EdlContent.Count; $i++) {
             $Line = $EdlContent[$i]
             if ($Line -match $Pattern) {
                 $StartTC = $Matches[1]
@@ -141,7 +140,7 @@ foreach ($File in $Files) {
                 
                 $Title = "Chapter $ChapterIndex"
                 if (($i + 1) -lt $EdlContent.Count) {
-                    $NextLine = $EdlContent[$i+1]
+                    $NextLine = $EdlContent[$i + 1]
                     if ($NextLine -match "\*\s*(LOC:|FROM CLIP NAME:)\s*(.*)") {
                         $Title = $Matches[2].Trim() -replace "^\d{2}:\d{2}:\d{2}[:;]\d{2}\s*", "" 
                     }
@@ -164,7 +163,8 @@ foreach ($File in $Files) {
             $MetadataContent | Out-File -FilePath $MetadataFile -Encoding UTF8
             $HasChapters = $true
         }
-    } else {
+    }
+    else {
         Write-Log "  [Info] No matching EDL found." "DarkGray"
     }
 
@@ -204,7 +204,7 @@ foreach ($File in $Files) {
     # 5. VERIFICATION STAGE
     if ($Process.ExitCode -eq 0) {
         try {
-            $DestProbe = ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,height -show_entries format=duration -of json "$TempOutput" | ConvertFrom-Json
+            $DestProbe = ffprobe -v error -select_streams v:0 -show_entries stream=codec_name, height -show_entries format=duration -of json "$TempOutput" | ConvertFrom-Json
             $DestAudioCount = (ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "$TempOutput" | Measure-Object).Count
             $DestChapterCount = (ffprobe -v error -show_chapters -of json "$TempOutput" | ConvertFrom-Json).chapters.Count
 
@@ -218,9 +218,14 @@ foreach ($File in $Files) {
             $ValidAudio = $SourceAudioCount -eq $DestAudioCount
 
             if ($ValidCodec -and $ValidHeight -and $ValidDuration -and $ValidAudio) {
+                $OldVideoFileSizeGb = [math]::Round($File.Length / 1GB, 2)
+                $NewVideoFileSizeGb = [math]::Round((Get-Item $TempOutput).Length / 1GB, 2)
+                $ReductionPerc = [math]::Round((($OldVideoFileSizeGb - $NewVideoFileSizeGb) / $OldVideoFileSizeGb) * 100, 2)
                 $TimeTaken = New-TimeSpan -Start $StartTime -End $EndTime
                 $ChapterMsg = if ($HasChapters) { " | Chapters: $DestChapterCount" } else { "" }
                 Write-Log "  [Success] Verified AV1 1080p | Audio: $SourceAudioCount -> $DestAudioCount$ChapterMsg" "Green"
+                Write-Log "  [Success] Video Size: $OldVideoFileSizeGb GB -> $NewVideoFileSizeGb GB ($ReductionPerc%)" "Green"
+                Write-Log "  [Success] Time taken: $TimeTaken" "Green"
                 
                 $OldBackupName = "OLD_" + $File.Name
                 $OldBackupPath = Join-Path $File.DirectoryName $OldBackupName
@@ -236,11 +241,13 @@ foreach ($File in $Files) {
                 if (Test-Path $TempOutput) { Remove-Item $TempOutput }
             }
 
-        } catch {
+        }
+        catch {
             Write-Log "  [Error] Probe failed." "Red"
             if (Test-Path $TempOutput) { Remove-Item $TempOutput }
         }
-    } else {
+    }
+    else {
         Write-Log "  [Error] FFmpeg crashed." "Red"
         if (Test-Path $TempOutput) { Remove-Item $TempOutput }
     }
