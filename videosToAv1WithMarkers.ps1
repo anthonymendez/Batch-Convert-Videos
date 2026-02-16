@@ -1,6 +1,6 @@
 <#
     Video Encoder Script
-    Copyright (C) 2026 Anthoyn Mendez
+    Copyright (C) 2026 Anthony Mendez
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -244,4 +244,5 @@ foreach ($File in $Files) {
         Write-Log "  [Error] FFmpeg crashed." "Red"
         if (Test-Path $TempOutput) { Remove-Item $TempOutput }
     }
+
 }
