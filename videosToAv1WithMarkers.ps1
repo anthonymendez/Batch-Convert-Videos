@@ -13,8 +13,12 @@
     GNU General Public License for more details.
 #>
 # --- Configuration ---
-$SourceFolder = "Z:\General\videoprojects\Recordings"
-$LogFile = "C:\Users\Anthony\Videos\encoding_log.txt"
+# Accept command line arguments for the source folder and log file.
+# If no arguments, default to the following values.
+param (
+    [string]$SourceFolder = "Z:\General\videoprojects\Recordings",
+    [string]$LogFile = "C:\Users\Anthony\Videos\encoding_log.txt"
+)
 $OutputExtension = ".mp4"
 $TargetHeight = 1080
 $Encoder = "av1_nvenc"
@@ -103,8 +107,16 @@ foreach ($File in $Files) {
 
     # 1. Analyze Source File
     try {
-        $SourceProbe = ffprobe -v error -select_streams v:0 -show_entries stream=codec_name, height, r_frame_rate -show_entries format=duration, nb_streams -of json "$($File.FullName)" | ConvertFrom-Json
-        $SourceAudioCount = (ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "$($File.FullName)" | Measure-Object).Count
+        $SourceProbe = ffprobe -v "error" `
+            -select_streams "v:0" `
+            -show_entries "stream=codec_name, height, r_frame_rate" `
+            -show_entries "format=duration, nb_streams" `
+            -of "json" "$($File.FullName)" | ConvertFrom-Json
+        $SourceAudioCount = (ffprobe -v "error" `
+                -select_streams "a" `
+                -show_entries "stream=index" `
+                -of "csv=p=0" `
+                "$($File.FullName)" | Measure-Object).Count
     }
     catch {
         Write-Log "  [Error] Could not probe source file. Skipping." "Red"
@@ -118,6 +130,11 @@ foreach ($File in $Files) {
     $FpsRaw = $SourceProbe.streams.r_frame_rate
     $Num, $Den = $FpsRaw.Split('/')
     $FrameRate = [double]$Num / [double]$Den
+
+    Write-Log "  [Info] Source Codec: $SourceCodec" "Green"
+    Write-Log "  [Info] Source Height: $SourceHeight" "Green"
+    Write-Log "  [Info] Source Duration: $SourceDuration" "Green"
+    Write-Log "  [Info] Source Frame Rate: $FrameRate" "Green"
 
     # 2. Find EDL (Fuzzy or Exact)
     $EdlFile = Get-BestMatchingEDL -VideoFile $File
@@ -175,6 +192,8 @@ foreach ($File in $Files) {
         continue
     }
 
+    Write-Log "  [Info] Converting to AV1 1080p." "Green"
+
     $TempOutput = Join-Path $File.DirectoryName ("TMP_" + $File.BaseName + $OutputExtension)
 
     # 4. Construct FFmpeg Arguments
@@ -204,9 +223,20 @@ foreach ($File in $Files) {
     # 5. VERIFICATION STAGE
     if ($Process.ExitCode -eq 0) {
         try {
-            $DestProbe = ffprobe -v error -select_streams v:0 -show_entries stream=codec_name, height -show_entries format=duration -of json "$TempOutput" | ConvertFrom-Json
-            $DestAudioCount = (ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "$TempOutput" | Measure-Object).Count
-            $DestChapterCount = (ffprobe -v error -show_chapters -of json "$TempOutput" | ConvertFrom-Json).chapters.Count
+            $DestProbe = ffprobe -v "error" `
+                -select_streams "v:0" `
+                -show_entries "stream=codec_name, height" `
+                -show_entries "format=duration" `
+                -of "json" "$TempOutput" | ConvertFrom-Json
+            $DestAudioCount = (ffprobe -v "error" `
+                    -select_streams "a" `
+                    -show_entries "stream=index" `
+                    -of "csv=p=0" `
+                    "$TempOutput" | Measure-Object).Count
+            $DestChapterCount = (ffprobe -v "error" `
+                    -show_chapters `
+                    -of "json" `
+                    "$TempOutput" | ConvertFrom-Json).chapters.Count
 
             $DestCodec = $DestProbe.streams.codec_name
             $DestHeight = $DestProbe.streams.height
