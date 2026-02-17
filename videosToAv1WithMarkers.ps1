@@ -12,6 +12,7 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
 #>
+
 # --- Configuration ---
 # Accept command line arguments for the source folder and log file.
 # If no arguments, default to the following values.
@@ -19,13 +20,16 @@ param (
     [string]$SourceFolder = "Z:\General\videoprojects\Recordings",
     [string]$LogFile = "C:\Users\Anthony\Videos\encoding_log.txt"
 )
+
+Import-Module .\NvencUtils.psm1 -Force
+
 $OutputExtension = ".mp4"
 $TargetHeight = 1080
 $Encoder = "av1_nvenc"
 $CQ = 26
 $Preset = "p7"
 $DurationTolerance = 5
-$MaxNvencSessions = 3
+$MaxNvencSessions = Get-LocalGPUSessionsMinusOneOrTwo
 
 # Supported extensions
 $VideoExtensions = @(".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".webm")
