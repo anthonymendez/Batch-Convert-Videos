@@ -12,13 +12,17 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
 #>
-
+# --- Example Calls ---
+# `.\videosToAv1WithMarkers.ps1`
+# Calls with default arguments.
+# `.\videosToAv1WithMarkers.ps1 -MaxEncodes`
 # --- Configuration ---
 # Accept command line arguments for the source folder and log file.
 # If no arguments, default to the following values.
 param (
     [string]$SourceFolder = "Z:\General\videoprojects\Recordings",
-    [string]$LogFile = "C:\Users\Anthony\Videos\encoding_log.txt"
+    [string]$LogFile = "C:\Users\Anthony\Videos\encoding_log.txt",
+    [int]$MaxEncodes = -1
 )
 
 Import-Module .\NvencUtils.psm1 -Force
@@ -29,7 +33,8 @@ $Encoder = "av1_nvenc"
 $CQ = 26
 $Preset = "p7"
 $DurationTolerance = 5
-$MaxNvencSessions = Get-LocalGPUSessionsMinusOneOrTwo
+# If MaxEncodes is still -1, use Get-LocalGPUSessionsMinusOneOrTwo instead.
+$EncoderSessionLimit = if ($MaxEncodes -eq -1) { Get-LocalGPUSessionsMinusOneOrTwo } else { $MaxEncodes }
 
 # Supported extensions
 $VideoExtensions = @(".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".webm")
@@ -59,6 +64,7 @@ function Write-Log {
 }
 
 # --- Main Script ---
+Write-Log "Encoder Session Limit: $EncoderSessionLimit" "Cyan"
 Write-Log "Starting Batch Processing (Fuzzy EDL Match)..." "Cyan"
 
 $Files = Get-ChildItem -Path $SourceFolder -Recurse | Where-Object { $VideoExtensions -contains $_.Extension.ToLower() }
@@ -364,4 +370,4 @@ $FilesToProcess | ForEach-Object -Parallel {
         }
     }
 
-} -ThrottleLimit $MaxNvencSessions
+} -ThrottleLimit $EncoderSessionLimit
