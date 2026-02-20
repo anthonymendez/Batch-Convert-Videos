@@ -122,6 +122,15 @@ function Main {
         [string]$LogFile,
         [int]$MaxEncodes
     )
+    if (-not (Get-Command "ffmpeg" -ErrorAction SilentlyContinue)) {
+        Write-Host "Error: 'ffmpeg' is not recognized. Please install FFmpeg and add it to your PATH." -ForegroundColor Red
+        return
+    }
+    if (-not (Get-Command "ffprobe" -ErrorAction SilentlyContinue)) {
+        Write-Host "Error: 'ffprobe' is not recognized. Please install FFprobe and add it to your PATH." -ForegroundColor Red
+        return
+    }
+
     Write-Log "Encoder Session Limit: $EncoderSessionLimit" "Cyan"
     Write-Log "Starting Batch Processing (Fuzzy EDL Match)..." "Cyan"
 
