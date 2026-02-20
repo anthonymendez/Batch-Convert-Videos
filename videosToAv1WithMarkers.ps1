@@ -135,17 +135,23 @@ function Main {
         return
     }
 
+    $WriteLogDefStr = ${function:Write-Log}.ToString()
+    $GetEdlDefStr = ${function:Get-BestMatchingEDL}.ToString()
+    $ConvertTimeDefStr = ${function:Convert-TimecodeToNs}.ToString()
+
     # Run in parallel
     $FilesToProcess | ForEach-Object -Parallel {
-        # Load functions from the main script
-        $WriteLogDef = ${using:function:Write-Log}
-        $GetEdlDef = ${using:function:Get-BestMatchingEDL}
-        $ConvertTimeDef = ${using:function:Convert-TimecodeToNs}
+        $LogFile = $using:LogFile
+
+        # Load functions from the main script as strings and create script blocks
+        $WriteLogDef = [scriptblock]::Create($using:WriteLogDefStr)
+        $GetEdlDef = [scriptblock]::Create($using:GetEdlDefStr)
+        $ConvertTimeDef = [scriptblock]::Create($using:ConvertTimeDefStr)
 
         # Re-create them in the local parallel runspace
-        New-Item -Path function:Write-Log -Value $WriteLogDef | Out-Null
-        New-Item -Path function:Get-BestMatchingEDL -Value $GetEdlDef | Out-Null
-        New-Item -Path function:Convert-TimecodeToNs -Value $ConvertTimeDef | Out-Null
+        New-Item -Path function:Write-Log -Value $WriteLogDef -Force | Out-Null
+        New-Item -Path function:Get-BestMatchingEDL -Value $GetEdlDef -Force | Out-Null
+        New-Item -Path function:Convert-TimecodeToNs -Value $ConvertTimeDef -Force | Out-Null
 
         $File = $_
         
