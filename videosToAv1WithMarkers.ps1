@@ -115,6 +115,52 @@ function Convert-TimecodeToNs {
     return 0
 }
 
+function Create-ChapterMetadataFromEDL {
+    param (
+        [string]$EdlFile,
+        [string]$MetadataFile,
+        [double]$FrameRate
+    )
+    
+    $EdlContent = Get-Content $EdlFile
+    $MetadataContent = @(";FFMETADATA1")
+    $Pattern = "\d+\s+.*\s+(\d{2}:\d{2}:\d{2}[:;]\d{2})\s+(\d{2}:\d{2}:\d{2}[:;]\d{2})$"
+    $ChapterIndex = 1
+    
+    for ($i = 0; $i -lt $EdlContent.Count; $i++) {
+        $Line = $EdlContent[$i]
+        if ($Line -match $Pattern) {
+            $StartTC = $Matches[1]
+            $EndTC = $Matches[2]
+            
+            $Title = "Chapter $ChapterIndex"
+            if (($i + 1) -lt $EdlContent.Count) {
+                $NextLine = $EdlContent[$i + 1]
+                if ($NextLine -match "\*\s*(LOC:|FROM CLIP NAME:)\s*(.*)") {
+                    $Title = $Matches[2].Trim() -replace "^\d{2}:\d{2}:\d{2}[:;]\d{2}\s*", "" 
+                }
+            }
+
+            $StartMs = Convert-TimecodeToNs -Timecode $StartTC -FrameRate $FrameRate
+            $EndMs = Convert-TimecodeToNs -Timecode $EndTC -FrameRate $FrameRate
+
+            $MetadataContent += "[CHAPTER]"
+            $MetadataContent += "TIMEBASE=1/1000"
+            $MetadataContent += "START=$StartMs"
+            $MetadataContent += "END=$EndMs"
+            $MetadataContent += "title=$Title"
+            
+            $ChapterIndex++
+        }
+    }
+
+    if ($ChapterIndex -gt 1) {
+        $MetadataContent | Out-File -FilePath $MetadataFile -Encoding UTF8
+        return $true
+    }
+    return $false
+}
+
 # --- Main Script ---
 function Main {
     param (
@@ -147,6 +193,7 @@ function Main {
     $WriteLogDefStr = ${function:Write-Log}.ToString()
     $GetEdlDefStr = ${function:Get-BestMatchingEDL}.ToString()
     $ConvertTimeDefStr = ${function:Convert-TimecodeToNs}.ToString()
+    $CreateChapterDefStr = ${function:Create-ChapterMetadataFromEDL}.ToString()
 
     # Run in parallel
     $FilesToProcess | ForEach-Object -Parallel {
@@ -156,11 +203,13 @@ function Main {
         $WriteLogDef = [scriptblock]::Create($using:WriteLogDefStr)
         $GetEdlDef = [scriptblock]::Create($using:GetEdlDefStr)
         $ConvertTimeDef = [scriptblock]::Create($using:ConvertTimeDefStr)
+        $CreateChapterDef = [scriptblock]::Create($using:CreateChapterDefStr)
 
         # Re-create them in the local parallel runspace
         New-Item -Path function:Write-Log -Value $WriteLogDef -Force | Out-Null
         New-Item -Path function:Get-BestMatchingEDL -Value $GetEdlDef -Force | Out-Null
         New-Item -Path function:Convert-TimecodeToNs -Value $ConvertTimeDef -Force | Out-Null
+        New-Item -Path function:Create-ChapterMetadataFromEDL -Value $CreateChapterDef -Force | Out-Null
 
         $File = $_
 
@@ -204,43 +253,7 @@ function Main {
 
         if ($EdlFile -and (Test-Path $EdlFile)) {
             Write-Log "  [Info] EDL Found for $($File.Name): $(Split-Path $EdlFile -Leaf)" "Yellow"
-            
-            $EdlContent = Get-Content $EdlFile
-            $MetadataContent = @(";FFMETADATA1")
-            $Pattern = "\d+\s+.*\s+(\d{2}:\d{2}:\d{2}[:;]\d{2})\s+(\d{2}:\d{2}:\d{2}[:;]\d{2})$"
-            $ChapterIndex = 1
-            
-            for ($i = 0; $i -lt $EdlContent.Count; $i++) {
-                $Line = $EdlContent[$i]
-                if ($Line -match $Pattern) {
-                    $StartTC = $Matches[1]
-                    $EndTC = $Matches[2]
-                    
-                    $Title = "Chapter $ChapterIndex"
-                    if (($i + 1) -lt $EdlContent.Count) {
-                        $NextLine = $EdlContent[$i + 1]
-                        if ($NextLine -match "\*\s*(LOC:|FROM CLIP NAME:)\s*(.*)") {
-                            $Title = $Matches[2].Trim() -replace "^\d{2}:\d{2}:\d{2}[:;]\d{2}\s*", "" 
-                        }
-                    }
-
-                    $StartMs = Convert-TimecodeToNs -Timecode $StartTC -FrameRate $FrameRate
-                    $EndMs = Convert-TimecodeToNs -Timecode $EndTC -FrameRate $FrameRate
-
-                    $MetadataContent += "[CHAPTER]"
-                    $MetadataContent += "TIMEBASE=1/1000"
-                    $MetadataContent += "START=$StartMs"
-                    $MetadataContent += "END=$EndMs"
-                    $MetadataContent += "title=$Title"
-                    
-                    $ChapterIndex++
-                }
-            }
-
-            if ($ChapterIndex -gt 1) {
-                $MetadataContent | Out-File -FilePath $MetadataFile -Encoding UTF8
-                $HasChapters = $true
-            }
+            $HasChapters = Create-ChapterMetadataFromEDL -EdlFile $EdlFile -MetadataFile $MetadataFile -FrameRate $FrameRate
         }
 
         # 3. Check if conversion is needed
