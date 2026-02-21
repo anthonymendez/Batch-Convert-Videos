@@ -163,8 +163,6 @@ function Main {
         New-Item -Path function:Convert-TimecodeToNs -Value $ConvertTimeDef -Force | Out-Null
 
         $File = $_
-        
-        # --- Function Definitions (Must be redefined in parallel runspace) ---
 
         $RelPath = $File.FullName.Replace($using:SourceFolder, "")
         # Note: Newlines in Write-Host might be messy in parallel, but keeping as is.
@@ -316,22 +314,32 @@ function Main {
                     if ($ValidCodec -and $ValidHeight -and $ValidDuration -and $ValidAudio) {
                         # Access file length via Get-Item because property might be stale on object? 
                         # $File is safe to use for read properties, but reload if size changed (unlikely for source).
-                        $OldVideoFileSizeGb = [math]::Round($File.Length / 1GB, 2)
-                        $NewVideoFileSizeGb = [math]::Round((Get-Item $TempOutput).Length / 1GB, 2)
-                        $ReductionPerc = [math]::Round((($OldVideoFileSizeGb - $NewVideoFileSizeGb) / $OldVideoFileSizeGb) * 100, 2)
+                        $OldVideoFileLen = $File.Length
+                        $NewVideoFileLen = (Get-Item $TempOutput).Length
+                        $OldVideoFileSizeGb = [math]::Round($OldVideoFileLen / 1GB, 2)
+                        $NewVideoFileSizeGb = [math]::Round($NewVideoFileLen / 1GB, 2)
+                        $ReductionPerc = if ($OldVideoFileLen -gt 0) { [math]::Round((($OldVideoFileLen - $NewVideoFileLen) / $OldVideoFileLen) * 100, 2) } else { 0 }
                         $TimeTaken = New-TimeSpan -Start $StartTime -End $EndTime
                         $ChapterMsg = if ($HasChapters) { " | Chapters: $DestChapterCount" } else { "" }
-                        Write-Log "  [Success] Verified $($File.Name) | Audio: $SourceAudioCount -> $DestAudioCount$ChapterMsg" "Green"
-                        Write-Log "  [Success] Video Size: $OldVideoFileSizeGb GB -> $NewVideoFileSizeGb GB ($ReductionPerc%)" "Green"
-                        Write-Log "  [Success] Time taken: $TimeTaken" "Green"
                         
-                        $OldBackupName = "OLD_" + $File.Name
-                        $OldBackupPath = Join-Path $File.DirectoryName $OldBackupName
-                        if (Test-Path $OldBackupPath) { Remove-Item $OldBackupPath -Force }
+                        if ($NewVideoFileLen -lt $OldVideoFileLen) {
+                            Write-Log "  [Success] Verified $($File.Name) | Audio: $SourceAudioCount -> $DestAudioCount$ChapterMsg" "Green"
+                            Write-Log "  [Success] Video Size: $OldVideoFileSizeGb GB -> $NewVideoFileSizeGb GB ($ReductionPerc%)" "Green"
+                            Write-Log "  [Success] Time taken: $TimeTaken" "Green"
+                            
+                            $OldBackupName = "OLD_" + $File.Name
+                            $OldBackupPath = Join-Path $File.DirectoryName $OldBackupName
+                            if (Test-Path $OldBackupPath) { Remove-Item $OldBackupPath -Force }
 
-                        Rename-Item -Path $File.FullName -NewName $OldBackupName
-                        $NewFinalName = $File.BaseName + $using:OutputExtension
-                        Rename-Item -Path $TempOutput -NewName $NewFinalName
+                            Rename-Item -Path $File.FullName -NewName $OldBackupName
+                            $NewFinalName = $File.BaseName + $using:OutputExtension
+                            Rename-Item -Path $TempOutput -NewName $NewFinalName
+                        }
+                        else {
+                            Write-Log "  [Reverted] Verified $($File.Name) | Audio: $SourceAudioCount -> $DestAudioCount$ChapterMsg" "Yellow"
+                            Write-Log "  [Reverted] New size ($NewVideoFileSizeGb GB) >= Old size ($OldVideoFileSizeGb GB) ($ReductionPerc%). Discarding new file." "Yellow"
+                            Write-Log "  [Reverted] Time taken: $TimeTaken" "Yellow"
+                        }
                     }
                     else {
                         Write-Log "  [FAILURE] Verification Failed for $($File.Name)! Keeping original." "Red"
