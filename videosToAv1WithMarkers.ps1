@@ -37,7 +37,7 @@ $DurationTolerance = 5
 $EncoderSessionLimit = if ($MaxEncodes -eq -1) { Get-LocalGPUSessionsMinusOneOrTwo } else { $MaxEncodes }
 
 # Supported extensions
-$VideoExtensions = @(".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".webm")
+$VideoExtensions = @(".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".webm", ".m4v")
 
 # --- Helper Function: Logging ---
 function Write-Log {
